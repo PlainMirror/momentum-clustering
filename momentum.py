@@ -260,7 +260,9 @@ def seed_centroids(feats, cfg):
     c = np.zeros((k, len(feats)))
     levels = np.linspace(-1.5, 1.5, k)            # lowest to highest; the last cluster is "momentum"
     for f in cfg["seed_features"]:
-        c[:, feats.index(f)] = levels
+        # a leading "-" seeds the feature the other way round, so the momentum cluster starts LOW on it
+        sign, name = (-1.0, f[1:]) if f.startswith("-") else (1.0, f)
+        c[:, feats.index(name)] = sign * levels
     return c
 
 

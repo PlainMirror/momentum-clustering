@@ -144,7 +144,39 @@ A few things stand out:
 
 Two signals are significant, and they point in opposite directions. 12-1 month momentum predicts higher returns (t = 2.2), but RSI, the feature the clusters are seeded on, predicts lower ones (t = -3.0). A 20-day RSI is a short-term measure, and over a month short-term strength tends to reverse. So by building the momentum cluster around high RSI, the strategy was picking stocks that had run up recently, which is the wrong end of the reversal. That also explains why seeding on 12-1 momentum and the 52-week high helped: those pull the cluster back toward long-horizon momentum. The long-short portfolio (cluster against the rest) has a negative alpha on every model, with a significant loading on the momentum factor (t = 3.0). So whatever it earns is the momentum factor, minus what the RSI tilt gives back.
 
-**What I would do next.** Rebuild the cluster around 12-1 momentum with RSI as a contrarian input (low RSI inside high momentum), choose it on CRSP 1999 to 2022, and test it once on the Yahoo data from January 2023 on, which none of the CRSP work has seen. That would be a real out-of-sample test, though at 3.5 years a short one.
+## Rebuilt around 12-1 momentum, with a holdout (`holdout.py`)
+
+So the next step was to seed the momentum cluster on 12-1 momentum instead of RSI, choose the design on CRSP, and then test it once on data none of the CRSP work had touched: Yahoo, January 2023 to June 2026. All of this was fixed in the script before it ran. There were three candidates, each needing to beat the fixed version in both CRSP halves, with the one whose worse half was best going forward.
+
+**Choosing on CRSP, 1999 to 2022:**
+
+| Seeded on | Sharpe 1999-2010 | 2011-22 | Sharpe | CAGR | Alpha vs SPY | t | Beta | RSI of cluster |
+|---|---|---|---|---|---|---|---|---|
+| RSI (the fixed version) | 0.08 | 0.58 | 0.32 | 4.4% | 0.1% | 0.04 | 0.71 | 61.7 |
+| **12-1 momentum** | **0.53** | **0.61** | **0.57** | **11.0%** | **5.7%** | **1.89** | 0.88 | 56.1 |
+| 12-1 momentum, RSI the other way | 0.51 | 0.58 | 0.54 | 10.7% | 5.9% | 1.70 | 0.85 | 47.5 |
+| 12-1 momentum and 52-week high, RSI the other way | 0.58 | 0.45 | 0.52 | 10.2% | 5.7% | 1.58 | 0.82 | 51.5 |
+| SPY | 0.20 | 0.72 | 0.43 | 6.8% | | | | |
+
+Seeding on 12-1 momentum is the best design in the project. It turns $1 into $12 over 24 years against $4.8 for SPY, and it works in both decades, including 1999 to 2010, where every RSI-seeded version failed. Its alpha of 5.7% a year has t = 1.89, the closest any version has come to significance. Seeding RSI the other way round on top of it didn't help, though: across stocks RSI predicts reversals, but once the cluster is built on long-run momentum, adding low RSI to it removes as much as it adds.
+
+**The holdout, January 2023 to June 2026, run once:**
+
+| | Total return | CAGR | Sharpe | Max drawdown | Alpha vs SPY | t | Beta |
+|---|---|---|---|---|---|---|---|
+| seeded on 12-1 momentum (chosen on CRSP) | 152% | 30.4% | 1.06 | -27.7% | 0.8% | 0.08 | 1.40 |
+| fixed (chosen on 2013-26, so not a fair holdout) | 100% | 22.0% | 1.02 | -19.8% | 5.4% | 0.59 | 0.79 |
+| extended (chosen on 2013-26, so not a fair holdout) | 101% | 22.2% | 1.05 | -14.9% | 5.1% | 0.63 | 0.81 |
+| SPY | 103% | 22.5% | 1.42 | -18.8% | | | |
+
+On the holdout the chosen design made 152% against SPY's 103%, but all of it came from market exposure. Its beta was 1.40, because the stocks with the strongest 12-month trends in 2023 to 2026 were the high-beta AI names. Its alpha was 0.8% (t = 0.08), its Sharpe was below SPY's (1.06 against 1.42), and its drawdown was deeper. So it passed the part of the test that is easy to pass, beating the index's return in a rising market, and failed the part that matters.
+
+Taking everything into account, the honest summary of this project is:
+
+- seeding the clusters on RSI was the original design's main mistake, since across stocks RSI predicts lower returns;
+- re-seeding on 12-1 momentum fixes most of that over 24 years (alpha t = 1.89);
+- out of sample it has so far delivered leveraged market exposure, not alpha;
+- 3.5 years is short, so the holdout can't rule an edge out, but it gives no support for one either.
 
 ## Limitations
 
@@ -167,6 +199,7 @@ python signal_test.py       # Fama-MacBeth and factor-adjusted tests of the clus
 python crsp_data.py
 MOM_DATA=crsp python experiments.py
 MOM_DATA=crsp python signal_test.py
+python holdout.py           # chooses on CRSP 1999-2022, then tests once on Yahoo 2023-2026
 ```
 
 | File | What it is |
@@ -175,6 +208,7 @@ MOM_DATA=crsp python signal_test.py
 | `experiments.py` | the pre-registered variants and the keep rule |
 | `signal_test.py` | Fama-MacBeth and factor-adjusted tests of the momentum cluster |
 | `crsp_data.py` | the same panel from CRSP, 1997 to 2022, on the top 500 stocks by market cap |
+| `holdout.py` | the cluster rebuilt around 12-1 momentum, chosen on CRSP and tested once on 2023-2026 |
 | `sp500_pit.py` | point-in-time S&P 500 membership (also its own repo, `sp500-point-in-time`) |
 | `results/experiments.md`, `.csv` | every variant's numbers |
 
