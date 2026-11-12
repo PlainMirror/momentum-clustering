@@ -1,0 +1,10 @@
+numpy>=1.26
+pandas>=2.2
+yfinance>=0.2.40
+pandas_ta>=0.3.14b
+statsmodels>=0.14
+pandas_datareader>=0.10
+scikit-learn>=1.4
+PyPortfolioOpt>=1.5
+pyarrow>=14
+
