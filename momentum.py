@@ -388,7 +388,7 @@ def run(cfg=CONFIG, panel=None, px=None, spy=None, membership=None):
     membership = load_membership() if membership is None else membership
     clusters = cluster(prepare(panel, cfg), cfg)
     strat, info = backtest(clusters, px, membership, cfg)
-    res = evaluate(strat, spy)
+    res = evaluate(strat, spy, cfg.get("split", "2021-07-01"))
     # what the momentum cluster looks like: average raw RSI of its members against everyone
     raw_rsi = panel["rsi"].reindex(clusters.index)
     top = clusters["cluster"] == cfg["n_clusters"] - 1

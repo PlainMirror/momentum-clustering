@@ -67,7 +67,7 @@ With the three features added (July 2013 to June 2026, daily returns):
 | beta to SPY | 0.87 | 1 |
 | alpha a year | 5.1% (t = 1.40) | |
 
-So it makes about 3 points a year more than SPY with a smaller drawdown, at the same Sharpe ratio. However, the alpha has a t-statistic of 1.40, which is not significant, and it is the one change kept out of nine tried. Taking this into account, I read it as momentum features genuinely helping the clustering, but not as an established edge over the index.
+So it makes about 3 points a year more than SPY with a smaller drawdown, at the same Sharpe ratio. However, the alpha has a t-statistic of 1.40, which is not significant, and it is the one change kept out of nine tried. The two sections below test it harder, and over 1999 to 2022 on CRSP it doesn't hold.
 
 ## Is the alpha real? (`signal_test.py`)
 
@@ -98,6 +98,54 @@ The Fama-French alpha clears t = 2, but mostly because the long-short has a mark
 
 Taking this into account, the evidence is weak. The three features clearly make the cluster better than the fixed version, but no test here reaches the t = 2.8 that nine variants call for, and the cross-sectional test, the most powerful one, finds nothing. The back test's alpha against SPY seems to come more from the max-Sharpe weighting and the positive-12-month filter applied inside the cluster, together with its factor tilts, than from the cluster picking better stocks. The next test is the same analysis on CRSP from 2001, with delisting returns, which roughly doubles the sample and removes the survivorship gap.
 
+## The longer test: CRSP, 1999 to 2022 (`crsp_data.py`)
+
+The obvious way to get more power, and to remove the survivorship gap, is more history from CRSP, which keeps every stock until it actually stops trading. My AI for Finance course gave us CRSP daily returns for every US stock, so I rebuilt the same panel from it. Three things had to change. The universe is the 500 largest US stocks by market cap each month instead of the S&P 500 list, because the course files that carry tickers only cover some industries. Garman-Klass and ATR become close-to-close versions, since the daily file has returns but no high or low. And the 150 stocks traded are the 150 largest, since there is no volume. Everything else, including the rule, is the same, with the halves now 1999 to 2010 and 2011 to 2022.
+
+(Note: the course data is licensed, so it isn't in this repository. `CRSP_DIR` points the script at it, and only results are here.)
+
+| Variant | Sharpe 1999-2010 | Sharpe 2011-22 | Sharpe | CAGR | Max drawdown |
+|---|---|---|---|---|---|
+| fixed | 0.08 | 0.58 | 0.32 | 4.4% | -54.0% |
+| 5 clusters | 0.09 | 0.59 | 0.33 | 4.6% | -54.5% |
+| 6 clusters | 0.25 | 0.64 | 0.44 | 7.0% | -54.3% |
+| 8 clusters | 0.18 | 0.55 | 0.36 | 5.4% | -52.9% |
+| expected returns shrunk | -0.05 | 0.62 | 0.28 | 3.3% | -56.7% |
+| minimum variance | -0.05 | 0.63 | 0.28 | 3.4% | -56.8% |
+| equal weights | -0.04 | 0.63 | 0.28 | 3.6% | -61.7% |
+| three momentum features | 0.10 | 0.72 | 0.40 | 5.9% | -52.6% |
+| the same three, seeded | 0.32 | 0.69 | 0.49 | 8.5% | -49.3% |
+| 6 clusters + seeded features (what the rule combines) | 0.33 | 0.48 | 0.40 | 7.2% | -60.9% |
+| SPY | 0.20 | 0.72 | 0.43 | 6.8% | -55.2% |
+
+Against SPY over the same 24 years:
+
+| | Alpha a year | t | Total return | SPY |
+|---|---|---|---|---|
+| fixed | 0.1% | 0.04 | 180% | 377% |
+| three momentum features (the 2013-2026 winner) | 1.6% | 0.67 | 295% | 377% |
+| the same three, seeded | 3.8% | 1.32 | 601% | 377% |
+
+A few things stand out:
+
+- **The 2013 to 2026 result does not hold up.** The version that passed on Yahoo data earns less than SPY over 1999 to 2022, with an alpha of 1.6% at t = 0.67. With twice the history and the delisted firms included, the edge mostly goes away.
+- Four changes passed the rule on CRSP (5 and 6 clusters, and both feature versions), but combining them as the rule says made things worse. Six clusters with seeded features leaves only 8 stocks a month, and the second half drops to 0.48. The best single version, seeded features, makes 601% against SPY's 377%, but at t = 1.32 that isn't significant either.
+- The whole strategy loses in 1999 to 2010 (Sharpe 0.08 against SPY's 0.20). That decade includes the 2000 to 2002 tech crash and 2009, when momentum strategies famously crashed as the beaten-down stocks rebounded.
+
+**What the cross-section says, over 286 months.** This is the most useful result in the project:
+
+| Fama-MacBeth, all features together | Coefficient, % a year per sd | t |
+|---|---|---|
+| 12-1 month momentum | +3.3 | 2.21 |
+| RSI | -4.0 | -2.98 |
+| distance to 52-week high | +0.3 | 0.19 |
+| vol-scaled momentum | -0.8 | -0.66 |
+| being in the cluster (with 12-1 momentum alongside) | -3.9 | -1.94 |
+
+Two signals are significant, and they point in opposite directions. 12-1 month momentum predicts higher returns (t = 2.2), but RSI, the feature the clusters are seeded on, predicts lower ones (t = -3.0). A 20-day RSI is a short-term measure, and over a month short-term strength tends to reverse. So by building the momentum cluster around high RSI, the strategy was picking stocks that had run up recently, which is the wrong end of the reversal. That also explains why seeding on 12-1 momentum and the 52-week high helped: those pull the cluster back toward long-horizon momentum. The long-short portfolio (cluster against the rest) has a negative alpha on every model, with a significant loading on the momentum factor (t = 3.0). So whatever it earns is the momentum factor, minus what the RSI tilt gives back.
+
+**What I would do next.** Rebuild the cluster around 12-1 momentum with RSI as a contrarian input (low RSI inside high momentum), choose it on CRSP 1999 to 2022, and test it once on the Yahoo data from January 2023 on, which none of the CRSP work has seen. That would be a real out-of-sample test, though at 3.5 years a short one.
+
 ## Limitations
 
 1. **Prices for the companies that left.** Yahoo served 622 of the 822 stocks that were in the index at some point. Most of the 200 missing ones were delisted, acquired or went bankrupt, and those tend to be the poor performers, so the results are still optimistic. A few live names (BK, EA, EQR) also returned nothing on the day this ran, which looks like a Yahoo problem rather than delisting. CRSP through WRDS would fix both.
@@ -114,6 +162,11 @@ python momentum.py          # downloads once (about 3 minutes), caches to cache/
 python experiments.py       # all variants in parallel (about 2 minutes on 6 cores)
 python retry_download.py    # retries tickers Yahoo returned nothing for
 python signal_test.py       # Fama-MacBeth and factor-adjusted tests of the cluster (about 20 seconds)
+
+# the same on CRSP, 1997 to 2022 (needs the licensed course files; set CRSP_DIR)
+python crsp_data.py
+MOM_DATA=crsp python experiments.py
+MOM_DATA=crsp python signal_test.py
 ```
 
 | File | What it is |
@@ -121,6 +174,7 @@ python signal_test.py       # Fama-MacBeth and factor-adjusted tests of the clus
 | `momentum.py` | data, features, clustering, weighting, back test and evaluation |
 | `experiments.py` | the pre-registered variants and the keep rule |
 | `signal_test.py` | Fama-MacBeth and factor-adjusted tests of the momentum cluster |
+| `crsp_data.py` | the same panel from CRSP, 1997 to 2022, on the top 500 stocks by market cap |
 | `sp500_pit.py` | point-in-time S&P 500 membership (also its own repo, `sp500-point-in-time`) |
 | `results/experiments.md`, `.csv` | every variant's numbers |
 

@@ -33,6 +33,11 @@ import statsmodels.api as sm
 
 import momentum as mm
 
+SOURCE = os.environ.get("MOM_DATA", "yahoo")
+if SOURCE == "crsp":
+    import crsp_data
+BASE = dict(crsp_data.CFG) if SOURCE == "crsp" else {}
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 FEATURES = ["mom_12_1", "high_52w", "mom_6m_risk_adj", "rsi"]
 SPECS = {
@@ -66,7 +71,7 @@ def umd():
 
 
 def build(cfg: dict, panel, px):
-    cfg = dict(mm.CONFIG, **cfg)
+    cfg = dict(mm.CONFIG, **BASE, **cfg)
     z = mm.prepare(panel, dict(cfg, features="extended"))            # z-scored features, every row
     cl = mm.cluster(mm.prepare(panel, cfg), cfg)["cluster"]
     d = z[[f for f in FEATURES]].join(panel[CONTROLS]).join(cl, how="inner")
@@ -123,9 +128,13 @@ def portfolios(d: pd.DataFrame, factors: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    panel, px = mm.build_panel(), mm.daily_prices()
-    factors = mm.ff_factors(mm.CONFIG).join(umd(), how="inner")
-    lines = ["# Signal tests\n"]
+    if SOURCE == "crsp":
+        panel, px = crsp_data.build(), crsp_data.daily_index(set())
+        factors = crsp_data.ff_long().join(crsp_data.umd_long(), how="inner")
+    else:
+        panel, px = mm.build_panel(), mm.daily_prices()
+        factors = mm.ff_factors(mm.CONFIG).join(umd(), how="inner")
+    lines = [f"# Signal tests ({SOURCE})\n"]
     for name, cfg in (("final (three momentum features added)", {"features": "extended"}), ("fixed", {})):
         d = build(cfg, panel, px)
         months = d.index.get_level_values("date")
@@ -145,7 +154,7 @@ def main():
         print(p.round(3).to_string(index=False), "\n", flush=True)
         lines += ["### Factor-adjusted portfolios\n", "| " + " | ".join(p.columns) + " |\n|" + "---|" * len(p.columns) + "\n" +
                   "\n".join("| " + " | ".join(f"{v:.3f}" if isinstance(v, float) else str(v) for v in r) + " |" for r in p.itertuples(index=False)), ""]
-    with open(os.path.join(ROOT, "results", "signal_test.md"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "results", f"signal_test{'_crsp' if SOURCE == 'crsp' else ''}.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
     print("wrote results/signal_test.md")
 

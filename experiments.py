@@ -34,6 +34,18 @@ import pandas as pd
 
 import momentum as mm
 
+# MOM_DATA=crsp runs the same experiments on CRSP, 1997 to 2022, split at 2011 (see crsp_data.py)
+SOURCE = os.environ.get("MOM_DATA", "yahoo")
+if SOURCE == "crsp":
+    import crsp_data
+    BASE = dict(crsp_data.CFG)
+    HALVES = ("Sharpe 1999-2010", "Sharpe 2011-22")
+    SUFFIX = "_crsp"
+else:
+    BASE = {}
+    HALVES = ("Sharpe 2013-21", "Sharpe 2021-26")
+    SUFFIX = ""
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SEEDED = ("rsi", "mom_12_1", "high_52w", "mom_6m_risk_adj")
 VARIANTS = {
@@ -56,15 +68,18 @@ _cache = {}
 
 def _data():
     if not _cache:
-        _cache.update(panel=mm.build_panel(), px=mm.daily_prices(), spy=mm.spy_returns(mm.CONFIG),
-                      membership=mm.load_membership())
+        if SOURCE == "crsp":
+            _cache.update(crsp_data.data_bundle())
+        else:
+            _cache.update(panel=mm.build_panel(), px=mm.daily_prices(), spy=mm.spy_returns(mm.CONFIG),
+                          membership=mm.load_membership())
     return _cache
 
 
 def run_one(item):
     name, change = item
     d = _data()
-    res, info, strat = mm.run(change, **d)
+    res, info, strat = mm.run(dict(BASE, **change), **d)
     row = {"variant": name}
     for part in ("strategy", "first_half", "second_half"):
         s = res[part] if part == "strategy" else res[part]["strategy"]
@@ -81,13 +96,13 @@ def run_one(item):
 
 
 def table(rows: pd.DataFrame) -> str:
-    cols = {"variant": "Variant", "first_half_Sharpe": "Sharpe 2013-21", "second_half_Sharpe": "Sharpe 2021-26",
+    cols = {"variant": "Variant", "first_half_Sharpe": HALVES[0], "second_half_Sharpe": HALVES[1],
             "strategy_Sharpe": "Sharpe", "strategy_CAGR": "CAGR", "strategy_MaxDD": "Max DD",
             "names_per_month": "Names a month", "rsi_momentum_cluster": "RSI of cluster", "kept": "Kept"}
     t = rows[[c for c in cols if c in rows]].rename(columns=cols).copy()
     for c in ("CAGR", "Max DD"):
         t[c] = (100 * t[c]).round(1).astype(str) + "%"
-    for c in ("Sharpe 2013-21", "Sharpe 2021-26", "Sharpe"):
+    for c in (*HALVES, "Sharpe"):
         t[c] = t[c].round(2)
     t["Names a month"] = t["Names a month"].round(1)
     t["RSI of cluster"] = t["RSI of cluster"].round(1)
@@ -99,7 +114,8 @@ def main():
     _data()          # build every cache file once here, so parallel workers only ever read them
     workers = max(1, min(len(VARIANTS), (os.cpu_count() or 4) - 2))
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        rows = pd.DataFrame(list(pool.map(run_one, VARIANTS.items())))
+        todo = {k: v for k, v in VARIANTS.items() if not (SOURCE == "crsp" and k == "legacy")}
+        rows = pd.DataFrame(list(pool.map(run_one, todo.items())))
     base = rows.set_index("variant").loc["fixed"]
     rows["kept"] = [(v not in ("legacy", "fixed")) and r.first_half_Sharpe > base.first_half_Sharpe
                     and r.second_half_Sharpe > base.second_half_Sharpe for v, r in zip(rows["variant"], rows.itertuples())]
@@ -120,13 +136,13 @@ def main():
     if final:
         out.append(pd.DataFrame([run_one(("final", final))]).assign(kept=None))
     allr = pd.concat(out, ignore_index=True)
-    allr.to_csv(os.path.join(ROOT, "results", "experiments.csv"), index=False)
+    allr.to_csv(os.path.join(ROOT, "results", f"experiments{SUFFIX}.csv"), index=False)
     b = allr.iloc[0]
-    md = [f"# Momentum experiments\n\nBack test {b['start']} to {b['end']}, split at 2021-07-01. "
-          f"SPY over the same days: Sharpe {b['spy_Sharpe']:.2f} (2013-21 {b['spy_first_Sharpe']:.2f}, "
-          f"2021-26 {b['spy_second_Sharpe']:.2f}), CAGR {100 * b['spy_CAGR']:.1f}%, max drawdown {100 * b['spy_MaxDD']:.1f}%.\n",
+    md = [f"# Momentum experiments ({SOURCE})\n\nBack test {b['start']} to {b['end']}, split at {BASE.get('split', '2021-07-01')}. "
+          f"SPY over the same days: Sharpe {b['spy_Sharpe']:.2f} ({HALVES[0][7:]} {b['spy_first_Sharpe']:.2f}, "
+          f"{HALVES[1][7:]} {b['spy_second_Sharpe']:.2f}), CAGR {100 * b['spy_CAGR']:.1f}%, max drawdown {100 * b['spy_MaxDD']:.1f}%.\n",
           table(allr), "", f"Final changes: `{final}`"]
-    with open(os.path.join(ROOT, "results", "experiments.md"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "results", f"experiments{SUFFIX}.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(md) + "\n")
     print("\n".join(md))
 
