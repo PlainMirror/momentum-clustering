@@ -69,6 +69,35 @@ With the three features added (July 2013 to June 2026, daily returns):
 
 So it makes about 3 points a year more than SPY with a smaller drawdown, at the same Sharpe ratio. However, the alpha has a t-statistic of 1.40, which is not significant, and it is the one change kept out of nine tried. Taking this into account, I read it as momentum features genuinely helping the clustering, but not as an established edge over the index.
 
+## Is the alpha real? (`signal_test.py`)
+
+An alpha t-statistic is roughly the information ratio times the square root of the number of years. Here that is about 0.39 x √13, so at the same information ratio it would take about 26 years of data to reach t = 2. And since one change was kept out of nine, the bar is really closer to t = 2.8. Trying more variants until one clears it would only produce a false positive. So instead I tested the signal in ways that have more power, using every stock in the universe every month (21,000 stock-months), not one portfolio of about 24 names.
+
+**Fama-MacBeth.** Each month, regress every stock's next-month return on whether it is in the momentum cluster, with last month's return (short-term reversal) and its market beta as controls, then test the average coefficient (Newey-West t, 3 lags). Coefficients are in % a year per unit, and features are z-scored across stocks each month.
+
+| Regression | Cluster | 12-1 momentum | 52-week high | Vol-scaled momentum | RSI |
+|---|---|---|---|---|---|
+| cluster alone | +1.0 (t = 0.30) | | | | |
+| cluster + 12-1 momentum | -1.7 (t = -0.47) | +2.5 (t = 1.19) | | | |
+| cluster + all four features | -2.5 (t = -0.72) | +4.2 (t = 1.67) | -2.7 (t = -1.35) | +1.2 (t = 0.65) | -0.6 (t = -0.32) |
+| features alone | | +4.0 (t = 1.62) | -2.4 (t = -1.17) | +0.7 (t = 0.37) | -0.7 (t = -0.37) |
+
+Across stocks, being in the cluster does not predict next month's return, and once 12-1 momentum is in the regression the cluster's coefficient turns negative. Of the features, only 12-1 momentum comes close (t = 1.6), which fits the well-known finding that momentum has been weak among large US stocks since 2009.
+
+**Factor-adjusted portfolio.** Each month, equal-weight the cluster against the rest of the universe (long-short), and regress its monthly returns on the Fama-French five factors, then on those plus the momentum factor (UMD):
+
+| Long-short, cluster minus the rest | Alpha a year | t |
+|---|---|---|
+| raw mean | 2.9% | 0.97 |
+| Fama-French 5 | 5.9% | 2.09 |
+| Fama-French 5 + UMD | 5.0% | 1.73 |
+
+(The fixed version, without the three features: 0.8%, 2.6% and 1.4%, all with t below 0.7.)
+
+The Fama-French alpha clears t = 2, but mostly because the long-short has a market beta of -0.16 in a market that returned 12.9% a year over Treasuries. Adjusting for that adds back about 2 points. Its loading on UMD is only 0.15 (t = 1.4), so it isn't simply the momentum factor in disguise, although it doesn't clear t = 2 once UMD is in the model either.
+
+Taking this into account, the evidence is weak. The three features clearly make the cluster better than the fixed version, but no test here reaches the t = 2.8 that nine variants call for, and the cross-sectional test, the most powerful one, finds nothing. The back test's alpha against SPY seems to come more from the max-Sharpe weighting and the positive-12-month filter applied inside the cluster, together with its factor tilts, than from the cluster picking better stocks. The next test is the same analysis on CRSP from 2001, with delisting returns, which roughly doubles the sample and removes the survivorship gap.
+
 ## Limitations
 
 1. **Prices for the companies that left.** Yahoo served 622 of the 822 stocks that were in the index at some point. Most of the 200 missing ones were delisted, acquired or went bankrupt, and those tend to be the poor performers, so the results are still optimistic. A few live names (BK, EA, EQR) also returned nothing on the day this ran, which looks like a Yahoo problem rather than delisting. CRSP through WRDS would fix both.
@@ -84,12 +113,14 @@ pip install -r requirements.txt
 python momentum.py          # downloads once (about 3 minutes), caches to cache/, runs the fixed version
 python experiments.py       # all variants in parallel (about 2 minutes on 6 cores)
 python retry_download.py    # retries tickers Yahoo returned nothing for
+python signal_test.py       # Fama-MacBeth and factor-adjusted tests of the cluster (about 20 seconds)
 ```
 
 | File | What it is |
 |---|---|
 | `momentum.py` | data, features, clustering, weighting, back test and evaluation |
 | `experiments.py` | the pre-registered variants and the keep rule |
+| `signal_test.py` | Fama-MacBeth and factor-adjusted tests of the momentum cluster |
 | `sp500_pit.py` | point-in-time S&P 500 membership (also its own repo, `sp500-point-in-time`) |
 | `results/experiments.md`, `.csv` | every variant's numbers |
 
