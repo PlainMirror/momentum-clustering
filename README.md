@@ -41,11 +41,41 @@ Research code. It places no orders and is not financial advice.
 
 The holdout's extra return came from a higher beta, not alpha: the strongest 12-month trends in 2023 to 2026 were high-beta technology stocks.
 
+![Growth of $1](docs/figures/growth.png)
+
+Most of the lead over 1999 to 2022 was built in 1999 and 2000, when the strategy held the trending technology names. It fell less than SPY in both the 2000 to 2002 and 2008 bear markets, but lagged in the 2009 rebound, when momentum strategies as a group crashed as beaten-down stocks bounced.
+
+## The three momentum factors
+
+| Factor | Definition | Why it helps |
+|---|---|---|
+| 12-1 month momentum | return from 12 months ago to 1 month ago | the classic momentum signal (Jegadeesh and Titman, 1993); skipping the latest month avoids its short-term reversal |
+| distance to the 52-week high | price / its highest close of the last year | stocks near their highs tend to keep rising, as investors anchor on the high (George and Hwang, 2004) |
+| volatility-scaled momentum | 6-month return / 6-month volatility | ranks trends by how smooth they were, so one jump doesn't count as a trend |
+
+Across stocks, only 12-1 momentum is significant on its own (t = 2.2 in the Fama-MacBeth test). The other two shape the clusters but add little by themselves.
+
+## Design choices
+
+- **Z-scoring every feature across stocks each month.** K-means works on distances, so without it the features on the biggest scale would decide the clusters.
+- **Seeded centroids.** With random starts, "cluster 3" could mean something different every month. Seeding the centroids at fixed levels of 12-1 momentum makes the top cluster the high-momentum group every month, so the strategy holds the same kind of stock throughout.
+- **The positive 12-month filter.** Inside the cluster, only stocks that actually went up over the year are held, which removes names that cluster with the trend on other features but haven't moved.
+- **Ledoit-Wolf covariance.** With 15 to 25 stocks and one year of daily data, the sample covariance is noisy, and the optimiser would chase that noise. Shrinking it toward a structured target stabilises the weights.
+- **Point-in-time data.** Membership, features and betas only use information available at each month-end, and the betas are lagged a month.
+
 ## How it was tested
 
 - **One change at a time.** Each design change was kept only if it raised Sharpe in both halves of the sample (1999 to 2010 and 2011 to 2022), with the rule written down before anything ran (`experiments.py`).
 - **Across stocks.** Fama-MacBeth regressions over 286 months show 12-1 momentum predicts higher next-month returns (t = 2.2) and 20-day RSI lower ones (t = -3.0), which is why the centroids are seeded on momentum (`signal_test.py`).
 - **Once on unseen data.** The final design was chosen on CRSP and then run once on 2023 to 2026, data the choice never saw (`holdout.py`).
+
+| Variant tested on CRSP | Sharpe 1999-2010 | Sharpe 2011-22 |
+|---|---|---|
+| clusters seeded on RSI | 0.08 | 0.58 |
+| 6 clusters | 0.25 | 0.64 |
+| equal weights instead of max Sharpe | -0.04 | 0.63 |
+| **seeded on 12-1 momentum (final)** | **0.53** | **0.61** |
+| SPY | 0.20 | 0.72 |
 
 Full tables are in `results/`.
 
