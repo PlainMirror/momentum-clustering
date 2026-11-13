@@ -4,6 +4,18 @@ I wanted to see whether K-means can find a group of stocks with momentum each mo
 
 Research code. It places no orders and is not financial advice.
 
+## The final model, in short
+
+- **Universe:** the 500 largest US stocks each month from CRSP (survivorship-free), 1997 to 2022, trading the largest 150.
+- **Features:** technical (RSI, MACD, Bollinger %B, volatility), Fama-French five-factor betas, and three momentum factors I added: 12-1 month momentum, distance to the 52-week high, and volatility-scaled 6-month momentum.
+- **Model:** K-means each month, with the starting centroids seeded on 12-1 month momentum so the top cluster means "strong long-run trend" every month. Its stocks with a positive 12-month return are weighted by maximum Sharpe on a Ledoit-Wolf covariance, with 10 basis points of cost per unit of turnover.
+- **Results, 1999 to 2022:** CAGR 11.0% against SPY's 6.8%, Sharpe 0.57 against 0.43, max drawdown -46.9% against -55.2%, alpha 5.7% a year (t = 1.89, beta 0.88).
+- **Holdout, January 2023 to June 2026, run once:** 152% against SPY's 103%, but with a beta of 1.40 and an alpha of 0.8% (t = 0.08).
+
+(Sharpe here is the mean daily return over its standard deviation, the same for the strategy and SPY, with no risk-free rate subtracted.)
+
+The rest of this README is how I got there, including the versions that didn't work.
+
 ## How it works
 
 Every month, among the 150 most liquid stocks that were in the S&P 500 at the time (membership from `sp500_pit.py`, so firms that later left the index are included):
